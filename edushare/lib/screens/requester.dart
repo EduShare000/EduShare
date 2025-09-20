@@ -9,7 +9,7 @@ class Requester extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Request App',
+      title: 'EduShare - Requester',
       theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF1C1C1E),
@@ -76,14 +76,13 @@ class Requester extends StatelessWidget {
   }
 }
 
-// The Request Model: A class to represent a single posting.
 class Request {
   String id;
   String title;
   String description;
   String contactInfo;
-  String requestType; // 'Take', 'Borrow', 'Both'
-  String status; // 'Active', 'Fulfilled'
+  String requestType;
+  String status;
 
   Request({
     required this.id,
@@ -104,6 +103,10 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final List<Request> myRequests = [];
+
+  // TODO: Replace with database user profile name
+  String profileName = "Guest User";
+
   void _addRequest(Request newRequest) {
     setState(() {
       myRequests.add(newRequest);
@@ -143,10 +146,30 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  void _openProfile() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ProfilePage(profileName: profileName),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Your Postings")),
+      appBar: AppBar(
+        title: const Text("Your Postings"),
+        actions: [
+          TextButton.icon(
+            onPressed: _openProfile,
+            icon: const Icon(Icons.account_circle, color: Colors.white),
+            label: Text(
+              profileName,
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
       body: myRequests.isEmpty
           ? Center(
         child: Column(
@@ -358,6 +381,37 @@ class _PostPageState extends State<PostPage> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class ProfilePage extends StatelessWidget {
+  final String profileName;
+
+  const ProfilePage({super.key, required this.profileName});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Profile")),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.account_circle, size: 100, color: Colors.cyanAccent),
+            const SizedBox(height: 20),
+            Text(
+              profileName,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              "TODO: Load profile details from database here",
+              style: TextStyle(color: Colors.grey[500]),
+            ),
+          ],
         ),
       ),
     );
