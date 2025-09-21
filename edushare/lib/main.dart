@@ -1,5 +1,26 @@
 import 'package:flutter/material.dart';
 
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Edushare Login',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        primarySwatch: Colors.grey,
+      ),
+      home: const LoginPage(),
+    );
+  }
+}
+
 class LoginPage extends StatelessWidget {
   const LoginPage({super.key});
 
@@ -13,9 +34,9 @@ class LoginPage extends StatelessWidget {
             end: Alignment.bottomRight,
             stops: const [0.1, 0.5, 0.9],
             colors: [
-              Colors.cyanAccent[400]!, 
-              Colors.greenAccent[400]!, 
-              Colors.orange[400]!,     
+              Colors.cyanAccent[400]!,
+              Colors.greenAccent[400]!,
+              Colors.orange[400]!,
             ],
           ),
         ),
@@ -52,7 +73,6 @@ class LoginPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 48.0),
-
                 TextField(
                   keyboardType: TextInputType.emailAddress,
                   style: const TextStyle(color: Colors.grey),
@@ -69,7 +89,6 @@ class LoginPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16.0),
-
                 TextField(
                   obscureText: true,
                   style: const TextStyle(color: Colors.grey),
@@ -86,7 +105,6 @@ class LoginPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 24.0),
-
                 ElevatedButton(
                   onPressed: () {
                   },
@@ -99,10 +117,11 @@ class LoginPage extends StatelessWidget {
                     ),
                     elevation: 5,
                   ),
-                  child: const Text('LOG IN', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: const Text('LOG IN',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
                 const SizedBox(height: 16.0),
-
                 TextButton(
                   onPressed: () {},
                   child: Text(
