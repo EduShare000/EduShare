@@ -10,10 +10,43 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Gradient Login',
+      title: 'EduShare Login',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(brightness: Brightness.dark, primarySwatch: Colors.grey),
-      home: const LoginPage(),
+      home: const YourPostingsScreen(),
+    );
+  }
+}
+
+class YourPostingsScreen extends StatelessWidget {
+  const YourPostingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF1C1C1E),
+              Color(0xFF121212), 
+            ],
+          ),
+        ),
+        child: const Center(
+          child: Text(
+            'Your Request Goes Here',
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {},
+        backgroundColor: Colors.lightBlueAccent,
+        child: const Icon(Icons.add),
+      ),
     );
   }
 }
@@ -67,7 +100,6 @@ class LoginPage extends StatelessWidget {
                   style: TextStyle(color: Colors.white70, fontSize: 16.0),
                 ),
                 const SizedBox(height: 48.0),
-
                 TextField(
                   keyboardType: TextInputType.emailAddress,
                   style: const TextStyle(color: Colors.grey),
@@ -84,7 +116,6 @@ class LoginPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16.0),
-
                 TextField(
                   obscureText: true,
                   style: const TextStyle(color: Colors.grey),
@@ -101,7 +132,6 @@ class LoginPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 24.0),
-
                 ElevatedButton(
                   onPressed: () {},
                   style: ElevatedButton.styleFrom(
@@ -119,7 +149,6 @@ class LoginPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16.0),
-
                 TextButton(
                   onPressed: () {},
                   child: Text(
