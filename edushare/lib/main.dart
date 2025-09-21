@@ -1,56 +1,5 @@
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'EduShare Login',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(brightness: Brightness.dark, primarySwatch: Colors.grey),
-      home: const YourPostingsScreen(),
-    );
-  }
-}
-
-class YourPostingsScreen extends StatelessWidget {
-  const YourPostingsScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF1C1C1E),
-              Color(0xFF121212), 
-            ],
-          ),
-        ),
-        child: const Center(
-          child: Text(
-            'Your Request Goes Here',
-            style: TextStyle(color: Colors.white),
-          ),
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {},
-        backgroundColor: Colors.lightBlueAccent,
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-}
-
 class LoginPage extends StatelessWidget {
   const LoginPage({super.key});
 
@@ -64,9 +13,9 @@ class LoginPage extends StatelessWidget {
             end: Alignment.bottomRight,
             stops: const [0.1, 0.5, 0.9],
             colors: [
-              Colors.cyanAccent[400]!,
-              Colors.greenAccent[400]!,
-              Colors.orange[400]!,
+              Colors.cyanAccent[400]!, 
+              Colors.greenAccent[400]!, 
+              Colors.orange[400]!,     
             ],
           ),
         ),
@@ -97,9 +46,13 @@ class LoginPage extends StatelessWidget {
                 const Text(
                   'Sign in to continue',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white70, fontSize: 16.0),
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 16.0,
+                  ),
                 ),
                 const SizedBox(height: 48.0),
+
                 TextField(
                   keyboardType: TextInputType.emailAddress,
                   style: const TextStyle(color: Colors.grey),
@@ -116,6 +69,7 @@ class LoginPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16.0),
+
                 TextField(
                   obscureText: true,
                   style: const TextStyle(color: Colors.grey),
@@ -132,8 +86,10 @@ class LoginPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 24.0),
+
                 ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () {
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.grey[800],
                     foregroundColor: Colors.white,
@@ -143,12 +99,10 @@ class LoginPage extends StatelessWidget {
                     ),
                     elevation: 5,
                   ),
-                  child: const Text(
-                    'LOG IN',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
+                  child: const Text('LOG IN', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
                 const SizedBox(height: 16.0),
+
                 TextButton(
                   onPressed: () {},
                   child: Text(
