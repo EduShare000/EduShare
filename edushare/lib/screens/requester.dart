@@ -2,10 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-void main() {
-  runApp(const Requester());
-}
-
 class Requester extends StatelessWidget {
   const Requester({super.key});
   @override
@@ -96,6 +92,7 @@ class Request {
     required this.requestType,
     this.status = 'Active',
   });
+
   Map<String, dynamic> toJson() {
     return {
       'userId': userId,
@@ -104,6 +101,7 @@ class Request {
       'contactInfo': contactInfo,
       'requestType': requestType,
       'status': status,
+      'timestamp': FieldValue.serverTimestamp(),
     };
   }
 
@@ -130,18 +128,33 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final User? currentUser = FirebaseAuth.instance.currentUser;
+  final CollectionReference requestsCollection = FirebaseFirestore.instance
+      .collection('requests');
+  final CollectionReference usersCollection = FirebaseFirestore.instance
+      .collection('users');
 
-  void _addRequest(Request newRequest) {
-    // TODO: Add logic here to save to a database. (STUCK, I THOUGHT THIS WOULD DO IT)
-    FirebaseFirestore.instance.collection('requests').add(newRequest.toJson());
+  Future<void> _addRequest(Request newRequest) async {
+    try {
+      await requestsCollection.add(newRequest.toJson());
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to post request: $e')));
+      }
+    }
   }
 
-  void _updateRequestStatus(String docId, String newStatus) {
-    // 🔥 TODO: Add logic here to update the database. (STUCK, I THOUGHT THIS WOULD DO IT)
-    FirebaseFirestore.instance
-        .collection('requests')
-        .doc(docId)
-        .update({'status': newStatus});
+  Future<void> _updateRequestStatus(String docId, String newStatus) async {
+    try {
+      await requestsCollection.doc(docId).update({'status': newStatus});
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to update status: $e')));
+      }
+    }
   }
 
   Widget _buildStatusChip(String status) {
@@ -170,36 +183,50 @@ class _HomePageState extends State<HomePage> {
 
   void _openProfile() {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => ProfilePage(user: currentUser),
-      ),
+      MaterialPageRoute(builder: (context) => ProfilePage(user: currentUser)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // 🔥 TODO: Replace with database user profile name (STUCK, I THOUGHT THIS WOULD DO IT)
-    String profileName = currentUser?.uid ?? "Guest User";
+    final profileFuture = usersCollection.doc(currentUser?.uid).get();
 
     return Scaffold(
       appBar: AppBar(
         title: const Text("Your Postings"),
         actions: [
-          TextButton.icon(
-            onPressed: _openProfile,
-            icon: const Icon(Icons.account_circle, color: Colors.white),
-            label: Text(
-              profileName,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
-              overflow: TextOverflow.ellipsis,
-            ),
+          FutureBuilder<DocumentSnapshot>(
+            future: profileFuture,
+            builder: (context, snapshot) {
+              String profileName = currentUser?.uid ?? "Guest User";
+
+              if (snapshot.hasData && snapshot.data!.exists) {
+                final data = snapshot.data!.data() as Map<String, dynamic>?;
+                profileName =
+                    data?['displayName'] ?? currentUser!.uid.substring(0, 8);
+              } else if (snapshot.connectionState == ConnectionState.waiting) {
+                profileName = "Loading...";
+              } else if (currentUser != null) {
+                profileName = currentUser!.uid.substring(0, 8);
+              }
+
+              return TextButton.icon(
+                onPressed: _openProfile,
+                icon: const Icon(Icons.account_circle, color: Colors.white),
+                label: Text(
+                  profileName,
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            },
           ),
         ],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('requests')
+        stream: requestsCollection
             .where('userId', isEqualTo: currentUser?.uid)
+            .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -260,10 +287,7 @@ class _HomePageState extends State<HomePage> {
                             _buildStatusChip(request.status),
                             Text(
                               "Type: ${request.requestType}",
-                              style: TextStyle(
-                                color: Colors.grey[500],
-                                fontSize: 13,
-                              ),
+                              style: TextStyle(color: Colors.grey[500]),
                             ),
                             PopupMenuButton<String>(
                               icon: Icon(
@@ -274,16 +298,16 @@ class _HomePageState extends State<HomePage> {
                                 _updateRequestStatus(request.id, result);
                               },
                               itemBuilder: (BuildContext context) =>
-                              <PopupMenuEntry<String>>[
-                                const PopupMenuItem<String>(
-                                  value: 'Fulfilled',
-                                  child: Text('Mark as Fulfilled'),
-                                ),
-                                const PopupMenuItem<String>(
-                                  value: 'Active',
-                                  child: Text('Mark as Active'),
-                                ),
-                              ],
+                                  <PopupMenuEntry<String>>[
+                                    const PopupMenuItem<String>(
+                                      value: 'Fulfilled',
+                                      child: Text('Mark as Fulfilled'),
+                                    ),
+                                    const PopupMenuItem<String>(
+                                      value: 'Active',
+                                      child: Text('Mark as Active'),
+                                    ),
+                                  ],
                             ),
                           ],
                         ),
@@ -411,8 +435,8 @@ class _PostPageState extends State<PostPage> {
                 items: ['Take', 'Borrow']
                     .map(
                       (label) =>
-                      DropdownMenuItem(value: label, child: Text(label)),
-                )
+                          DropdownMenuItem(value: label, child: Text(label)),
+                    )
                     .toList(),
                 onChanged: (value) {
                   setState(() {
@@ -446,21 +470,59 @@ class ProfilePage extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.account_circle,
-                size: 100, color: Colors.cyanAccent),
-            const SizedBox(height: 20),
-            Text(
-              // 🔥 TODO: Load profile details from database here (STUCK, I THOUGHT THIS WOULD DO IT)
-              "User ID:",
-              style: Theme.of(context).textTheme.titleMedium,
+            const Icon(
+              Icons.account_circle,
+              size: 100,
+              color: Colors.cyanAccent,
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 20),
+            FutureBuilder<DocumentSnapshot>(
+              future: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(user?.uid)
+                  .get(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Text("Loading Profile Details...");
+                }
+
+                String displayName = "User ID:";
+                String profileDetails = "No extra details found.";
+
+                if (snapshot.hasData && snapshot.data!.exists) {
+                  final data = snapshot.data!.data() as Map<String, dynamic>?;
+                  displayName = data?['displayName'] ?? 'User ID:';
+                  profileDetails =
+                      data?['schoolName'] ?? 'No school registered.';
+                }
+
+                return Column(
+                  children: [
+                    Text(
+                      displayName,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Text(
+                        profileDetails,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey[500], fontSize: 16),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 20),
+            Text("User UID:", style: Theme.of(context).textTheme.bodyLarge),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Text(
                 user?.uid ?? "Not signed in",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey[500], fontSize: 16),
+                style: TextStyle(color: Colors.grey[500], fontSize: 12),
               ),
             ),
             const SizedBox(height: 20),
