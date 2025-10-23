@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as path;
 import 'package:firebase_auth/firebase_auth.dart';
 import '../app_navigator.dart';
 
 /// A lightweight wrapper widget exported for use inside the app shell.
-class Requester extends StatelessWidget {
-  const Requester({super.key});
+class Donator extends StatelessWidget {
+  const Donator({super.key});
 
   @override
   Widget build(BuildContext context) {
     // The main MaterialApp is provided by `main.dart` (AppShell).
-    // This widget is kept for backwards compatibility if needed.
-    return const RequesterHomePage();
+    return const DonatorHomePage();
   }
 }
 
@@ -61,19 +63,164 @@ class Request {
   }
 }
 
-class RequesterHomePage extends StatefulWidget {
-  const RequesterHomePage({super.key});
+// Create Listing Page for Donators to post public listings
+class CreateListingPage extends StatefulWidget {
+  final Function(Listing) onPostListing;
+
+  const CreateListingPage({super.key, required this.onPostListing});
 
   @override
-  State<RequesterHomePage> createState() => _RequesterHomePageState();
+  State<CreateListingPage> createState() => _CreateListingPageState();
 }
 
-class _RequesterHomePageState extends State<RequesterHomePage> {
+class _CreateListingPageState extends State<CreateListingPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _contactController = TextEditingController();
+  final User? currentUser = FirebaseAuth.instance.currentUser;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _contactController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_formKey.currentState!.validate() && currentUser != null) {
+      // upload image first if selected
+      _createListing();
+    }
+  }
+
+  Future<void> _createListing() async {
+    final uid = currentUser!.uid;
+    String imageUrl = '';
+      if (_pickedFile != null) {
+      final fileName = path.basename(_pickedFile!.path);
+      final ref = FirebaseStorage.instance.ref().child('listing_images/$uid/$fileName');
+        await ref.putFile(File(_pickedFile!.path));
+      imageUrl = await ref.getDownloadURL();
+    }
+
+    // read user's schoolName from users collection
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      String schoolName = '';
+      if (userDoc.exists) {
+        final data = userDoc.data() as Map<String, dynamic>?;
+        schoolName = data?['schoolName'] ?? '';
+      }
+
+    final listing = Listing(
+      id: '',
+      userId: uid,
+      title: _titleController.text,
+      description: _descriptionController.text,
+      contactInfo: _contactController.text,
+    );
+
+    // return full map including schoolName and imageUrl
+    final listingMap = listing.toJson();
+    listingMap['schoolName'] = schoolName;
+    listingMap['imageUrl'] = imageUrl;
+
+    widget.onPostListing(Listing(
+      id: '',
+      userId: uid,
+      title: listing.title,
+      description: listing.description,
+      contactInfo: listing.contactInfo,
+    ));
+    // directly write the map to the listings collection to include fields
+    await FirebaseFirestore.instance.collection('listings').add(listingMap);
+
+    appNavigatorKey.currentState?.pop();
+  }
+
+  XFile? _pickedFile;
+
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? file = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1200);
+    if (file != null) {
+      setState(() {
+        _pickedFile = file;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Create Listing')),
+      body: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            children: [
+              TextFormField(
+                controller: _titleController,
+                decoration: const InputDecoration(labelText: 'Title'),
+                validator: (v) => v == null || v.isEmpty ? 'Enter a title' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _descriptionController,
+                maxLines: 4,
+                decoration: const InputDecoration(labelText: 'Description'),
+                validator: (v) => v == null || v.isEmpty ? 'Enter description' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _contactController,
+                decoration: const InputDecoration(labelText: 'Contact Info'),
+                validator: (v) => v == null || v.isEmpty ? 'Enter contact info' : null,
+              ),
+              const SizedBox(height: 12),
+              // Image picker
+              Row(
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _pickImage,
+                    icon: const Icon(Icons.photo),
+                    label: const Text('Pick Image'),
+                  ),
+                  const SizedBox(width: 12),
+                  if (_pickedFile != null)
+                    SizedBox(
+                      width: 80,
+                      height: 80,
+                      child: Image.file(File(_pickedFile!.path), fit: BoxFit.cover),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(onPressed: _submit, child: const Text('Post Listing')),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class DonatorHomePage extends StatefulWidget {
+  const DonatorHomePage({super.key});
+
+  @override
+  State<DonatorHomePage> createState() => _DonatorHomePageState();
+}
+
+class _DonatorHomePageState extends State<DonatorHomePage> {
+
   final User? currentUser = FirebaseAuth.instance.currentUser;
   final CollectionReference requestsCollection = FirebaseFirestore.instance
       .collection('requests');
   final CollectionReference listingsCollection = FirebaseFirestore.instance
-      .collection('listings');
+    .collection('listings');
   final CollectionReference usersCollection = FirebaseFirestore.instance
       .collection('users');
 
@@ -85,6 +232,22 @@ class _RequesterHomePageState extends State<RequesterHomePage> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Failed to post request: $e')));
+      }
+    }
+  }
+
+  Future<void> _addListing(Listing newListing) async {
+    try {
+      await listingsCollection.add(newListing.toJson());
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Listing posted')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to post listing: $e')));
       }
     }
   }
@@ -135,13 +298,10 @@ class _RequesterHomePageState extends State<RequesterHomePage> {
   Widget build(BuildContext context) {
     final profileFuture = usersCollection.doc(currentUser?.uid).get();
 
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text("Your Postings"),
-          bottom: const TabBar(tabs: [Tab(text: 'Your Posts'), Tab(text: 'Listings')]),
-          actions: [
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Your Postings"),
+        actions: [
           FutureBuilder<DocumentSnapshot>(
             future: profileFuture,
             builder: (context, snapshot) {
@@ -170,182 +330,112 @@ class _RequesterHomePageState extends State<RequesterHomePage> {
           ),
         ],
       ),
-        body: TabBarView(children: [
-          // Tab 0: Your posts (existing behavior)
-          StreamBuilder<QuerySnapshot>(
-            stream: requestsCollection
-                .where('userId', isEqualTo: currentUser?.uid)
-                .orderBy('timestamp', descending: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
-              }
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const SizedBox(height: 16),
-                      Text(
-                        "You haven't requested anything yet",
-                        style: TextStyle(fontSize: 16, color: Colors.grey[500]),
-                      ),
-                    ],
+      body: StreamBuilder<QuerySnapshot>(
+        stream: requestsCollection
+            .where('userId', isEqualTo: currentUser?.uid)
+            .orderBy('timestamp', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(height: 16),
+                  Text(
+                    "You haven't requested anything yet",
+                    style: TextStyle(fontSize: 16, color: Colors.grey[500]),
                   ),
-                );
-              }
+                ],
+              ),
+            );
+          }
 
-              final requests = snapshot.data!.docs;
-              return ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: requests.length,
-                itemBuilder: (context, index) {
-                  final requestDoc = requests[index];
-                  final request = Request.fromFirestore(requestDoc);
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16.0),
-                    child: Card(
-                      elevation: 5,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+          final requests = snapshot.data!.docs;
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: requests.length,
+            itemBuilder: (context, index) {
+              final requestDoc = requests[index];
+              final request = Request.fromFirestore(requestDoc);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16.0),
+                child: Card(
+                  elevation: 5,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          request.title,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          request.description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: Colors.grey[400]),
+                        ),
+                        const Divider(height: 24, color: Colors.white12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
+                            _buildStatusChip(request.status),
                             Text(
-                              request.title,
-                              style: Theme.of(context).textTheme.titleSmall,
+                              "Type: ${request.requestType}",
+                              style: TextStyle(color: Colors.grey[500]),
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              request.description,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: Colors.grey[400]),
-                            ),
-                            const Divider(height: 24, color: Colors.white12),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                _buildStatusChip(request.status),
-                                Text(
-                                  "Type: ${request.requestType}",
-                                  style: TextStyle(color: Colors.grey[500]),
-                                ),
-                                PopupMenuButton<String>(
-                                  icon: Icon(
-                                    Icons.more_vert,
-                                    color: Colors.grey[500],
-                                  ),
-                                  onSelected: (String result) {
-                                    _updateRequestStatus(request.id, result);
-                                  },
-                                  itemBuilder: (BuildContext context) =>
-                                      <PopupMenuEntry<String>>[
-                                        const PopupMenuItem<String>(
-                                          value: 'Fulfilled',
-                                          child: Text('Mark as Fulfilled'),
-                                        ),
-                                        const PopupMenuItem<String>(
-                                          value: 'Active',
-                                          child: Text('Mark as Active'),
-                                        ),
-                                      ],
-                                ),
-                              ],
+                            PopupMenuButton<String>(
+                              icon: Icon(
+                                Icons.more_vert,
+                                color: Colors.grey[500],
+                              ),
+                              onSelected: (String result) {
+                                _updateRequestStatus(request.id, result);
+                              },
+                              itemBuilder: (BuildContext context) =>
+                                  <PopupMenuEntry<String>>[
+                                    const PopupMenuItem<String>(
+                                      value: 'Fulfilled',
+                                      child: Text('Mark as Fulfilled'),
+                                    ),
+                                    const PopupMenuItem<String>(
+                                      value: 'Active',
+                                      child: Text('Mark as Active'),
+                                    ),
+                                  ],
                             ),
                           ],
                         ),
-                      ),
+                      ],
                     ),
-                  );
-                },
+                  ),
+                ),
               );
             },
-          ),
-
-          // Tab 1: Public listings (from donors) filtered by user's school
-          FutureBuilder<DocumentSnapshot>(
-            future: usersCollection.doc(currentUser?.uid).get(),
-            builder: (context, userSnapshot) {
-              if (userSnapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
-                return Center(child: Text('No profile info found.', style: TextStyle(color: Colors.grey[500])));
-              }
-              final userData = userSnapshot.data!.data() as Map<String, dynamic>?;
-              final schoolName = userData?['schoolName'] ?? '';
-
-              return StreamBuilder<QuerySnapshot>(
-                stream: listingsCollection
-                    .where('schoolName', isEqualTo: schoolName)
-                    .orderBy('timestamp', descending: true)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return Center(child: Text('No listings available for your school', style: TextStyle(color: Colors.grey[500])));
-                  }
-                  final docs = snapshot.data!.docs;
-                  return ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: docs.length,
-                    itemBuilder: (context, index) {
-                      final doc = docs[index];
-                      final data = doc.data() as Map<String, dynamic>;
-                      final imageUrl = data['imageUrl'] as String? ?? '';
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.all(12),
-                          leading: imageUrl.isNotEmpty
-                              ? SizedBox(
-                                  width: 72,
-                                  height: 72,
-                                  child: CachedNetworkImage(
-                                    imageUrl: imageUrl,
-                                    fit: BoxFit.cover,
-                                    placeholder: (c, s) => const Center(child: CircularProgressIndicator()),
-                                    errorWidget: (c, s, e) => const Icon(Icons.broken_image),
-                                  ),
-                                )
-                              : const SizedBox(width: 72, height: 72, child: Icon(Icons.photo)),
-                          title: Text(data['title'] ?? '', style: Theme.of(context).textTheme.titleMedium),
-                          subtitle: Text(
-                            data['description'] ?? '',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: Text(data['contactInfo'] ?? ''),
-                        ),
-                      );
-                    },
-                  );
-                },
-              );
-            },
-          ),
-        ]),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () {
-            appNavigatorKey.currentState?.push(
-              MaterialPageRoute(
-                builder: (context) => PostPage(onPost: _addRequest),
-              ),
-            );
-          },
-          child: const Icon(Icons.add),
-        ),
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          appNavigatorKey.currentState?.push(
+            MaterialPageRoute(
+              builder: (context) => CreateListingPage(onPostListing: _addListing),
+            ),
+          );
+        },
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -388,7 +478,7 @@ class _PostPageState extends State<PostPage> {
         requestType: _requestType,
       );
       widget.onPost(newRequest);
-      Navigator.of(context).pop();
+      appNavigatorKey.currentState?.pop();
     }
   }
 
@@ -550,6 +640,41 @@ class ProfilePage extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class Listing {
+  String id;
+  String userId;
+  String title;
+  String description;
+  String contactInfo;
+
+  Listing({
+    required this.id,
+    required this.userId,
+    required this.title,
+    required this.description,
+    required this.contactInfo,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'userId': userId,
+        'title': title,
+        'description': description,
+        'contactInfo': contactInfo,
+        'timestamp': FieldValue.serverTimestamp(),
+      };
+
+  factory Listing.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return Listing(
+      id: doc.id,
+      userId: data['userId'] ?? '',
+      title: data['title'] ?? '',
+      description: data['description'] ?? '',
+      contactInfo: data['contactInfo'] ?? '',
     );
   }
 }
