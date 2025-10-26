@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'screens/requester.dart' as requester_screen;
 import 'screens/donator.dart' as donator_screen;
+import 'screens/login_page.dart';
 import 'app_navigator.dart';
 
 void main() async {
@@ -12,10 +13,6 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    UserCredential userCredential =
-        await FirebaseAuth.instance.signInAnonymously();
-    print("Signed in anonymously with UID: ${userCredential.user?.uid}");
-
     runApp(const AppShell());
   } catch (e) {
     print("Error initializing Firebase: $e");
@@ -33,6 +30,17 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   // 0 = Requester, 1 = Donator
   int _selectedIndex = 0;
+  bool _isLoggedIn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    FirebaseAuth.instance.authStateChanges().listen((User? user) {
+      setState(() {
+        _isLoggedIn = user != null;
+      });
+    });
+  }
 
   void _select(int index) {
     setState(() {
@@ -76,48 +84,58 @@ class _AppShellState extends State<AppShell> {
       title: 'EduShare',
       navigatorKey: appNavigatorKey,
       theme: theme,
-      home: Scaffold(
-        appBar: AppBar(
-          title: Text('EduShare - $title'),
-        ),
-        drawer: Drawer(
-          child: SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                DrawerHeader(
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF111111),
+      home: _isLoggedIn 
+          ? Scaffold(
+              appBar: AppBar(
+                title: Text('EduShare - $title'),
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.logout),
+                    onPressed: () {
+                      FirebaseAuth.instance.signOut();
+                    },
                   ),
-                  child: Center(
-                    child: Text('EduShare',
-                        style: Theme.of(context).textTheme.titleLarge),
+                ],
+              ),
+              drawer: Drawer(
+                child: SafeArea(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      DrawerHeader(
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF111111),
+                        ),
+                        child: Center(
+                          child: Text('EduShare',
+                              style: Theme.of(context).textTheme.titleLarge),
+                        ),
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.list),
+                        title: const Text('Requester - Find items'),
+                        selected: _selectedIndex == 0,
+                        onTap: () {
+                          appNavigatorKey.currentState?.pop();
+                          _select(0);
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.add_box),
+                        title: const Text('Donator - Create listings'),
+                        selected: _selectedIndex == 1,
+                        onTap: () {
+                          appNavigatorKey.currentState?.pop();
+                          _select(1);
+                        },
+                      ),
+                    ],
                   ),
                 ),
-                ListTile(
-                  leading: const Icon(Icons.list),
-                  title: const Text('Requester - Find items'),
-                  selected: _selectedIndex == 0,
-                  onTap: () {
-                    appNavigatorKey.currentState?.pop();
-                    _select(0);
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.add_box),
-                  title: const Text('Donator - Create listings'),
-                  selected: _selectedIndex == 1,
-                  onTap: () {
-                    appNavigatorKey.currentState?.pop();
-                    _select(1);
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
-        body: body,
-      ),
+              ),
+              body: body,
+            )
+          : const LoginPage(),
     );
   }
 }
