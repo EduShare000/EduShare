@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Public listings collection: authenticated users can read.
+    match /listings/{listingId} {
+      // Allow reads only when the caller is authenticated and the listing
+      // belongs to the same school as the caller (caller must have a user doc).
+      allow read: if request.auth != null
+                  && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolName == resource.data.schoolName;
+
+      // On create, require authentication, require userId matches caller,
+      // and require `schoolName` and `imageUrl` fields are present.
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.schoolName is string
+                    && request.resource.data.imageUrl is string;
+
+      // Allow updates/deletes only to the owner of the listing.
+      allow update, delete: if request.auth != null
+                            && resource.data.userId == request.auth.uid;
+    }
+
+    // Requests collection: users can create personal requests and owners can edit/delete.
+    match /requests/{requestId} {
+      allow read, list: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+
+    // Default: deny everything else. Add explicit rules for other collections as needed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

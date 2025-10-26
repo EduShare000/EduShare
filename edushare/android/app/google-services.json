@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "717135300117",
+    "project_id": "edusharedb-ee642",
+    "storage_bucket": "edusharedb-ee642.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:717135300117:android:718db440c03ba0c876701c",
+        "android_client_info": {
+          "package_name": "com.example.edushare"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAIm207tfweVMKaE8j7RqlJ6BY4uj7vGgQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
