@@ -4,14 +4,11 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../app_navigator.dart';
 
-/// A lightweight wrapper widget exported for use inside the app shell.
 class Requester extends StatelessWidget {
   const Requester({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // The main MaterialApp is provided by `main.dart` (AppShell).
-    // This widget is kept for backwards compatibility if needed.
     return const RequesterHomePage();
   }
 }
@@ -76,6 +73,9 @@ class _RequesterHomePageState extends State<RequesterHomePage> {
       .collection('listings');
   final CollectionReference usersCollection = FirebaseFirestore.instance
       .collection('users');
+
+
+  bool _filterBySchool = true;
 
   Future<void> _addRequest(Request newRequest) async {
     try {
@@ -142,36 +142,35 @@ class _RequesterHomePageState extends State<RequesterHomePage> {
           title: const Text("Your Postings"),
           bottom: const TabBar(tabs: [Tab(text: 'Your Posts'), Tab(text: 'Listings')]),
           actions: [
-          FutureBuilder<DocumentSnapshot>(
-            future: profileFuture,
-            builder: (context, snapshot) {
-              String profileName = currentUser?.uid ?? "Guest User";
+            FutureBuilder<DocumentSnapshot>(
+              future: profileFuture,
+              builder: (context, snapshot) {
+                String profileName = currentUser?.uid ?? "Guest User";
 
-              if (snapshot.hasData && snapshot.data!.exists) {
-                final data = snapshot.data!.data() as Map<String, dynamic>?;
-                profileName =
-                    data?['displayName'] ?? currentUser!.uid.substring(0, 8);
-              } else if (snapshot.connectionState == ConnectionState.waiting) {
-                profileName = "Loading...";
-              } else if (currentUser != null) {
-                profileName = currentUser!.uid.substring(0, 8);
-              }
+                if (snapshot.hasData && snapshot.data!.exists) {
+                  final data = snapshot.data!.data() as Map<String, dynamic>?;
+                  profileName =
+                      data?['displayName'] ?? currentUser!.uid.substring(0, 8);
+                } else if (snapshot.connectionState == ConnectionState.waiting) {
+                  profileName = "Loading...";
+                } else if (currentUser != null) {
+                  profileName = currentUser!.uid.substring(0, 8);
+                }
 
-              return TextButton.icon(
-                onPressed: _openProfile,
-                icon: const Icon(Icons.account_circle, color: Colors.white),
-                label: Text(
-                  profileName,
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              );
-            },
-          ),
-        ],
-      ),
+                return TextButton.icon(
+                  onPressed: _openProfile,
+                  icon: const Icon(Icons.account_circle, color: Colors.white),
+                  label: Text(
+                    profileName,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
         body: TabBarView(children: [
-          // Tab 0: Your posts (existing behavior)
           StreamBuilder<QuerySnapshot>(
             stream: requestsCollection
                 .where('userId', isEqualTo: currentUser?.uid)
@@ -247,16 +246,16 @@ class _RequesterHomePageState extends State<RequesterHomePage> {
                                     _updateRequestStatus(request.id, result);
                                   },
                                   itemBuilder: (BuildContext context) =>
-                                      <PopupMenuEntry<String>>[
-                                        const PopupMenuItem<String>(
-                                          value: 'Fulfilled',
-                                          child: Text('Mark as Fulfilled'),
-                                        ),
-                                        const PopupMenuItem<String>(
-                                          value: 'Active',
-                                          child: Text('Mark as Active'),
-                                        ),
-                                      ],
+                                  <PopupMenuEntry<String>>[
+                                    const PopupMenuItem<String>(
+                                      value: 'Fulfilled',
+                                      child: Text('Mark as Fulfilled'),
+                                    ),
+                                    const PopupMenuItem<String>(
+                                      value: 'Active',
+                                      child: Text('Mark as Active'),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -270,7 +269,6 @@ class _RequesterHomePageState extends State<RequesterHomePage> {
             },
           ),
 
-          // Tab 1: Public listings (from donors) filtered by user's school
           FutureBuilder<DocumentSnapshot>(
             future: usersCollection.doc(currentUser?.uid).get(),
             builder: (context, userSnapshot) {
@@ -283,33 +281,87 @@ class _RequesterHomePageState extends State<RequesterHomePage> {
               final userData = userSnapshot.data!.data() as Map<String, dynamic>?;
               final schoolName = userData?['schoolName'] ?? '';
 
-              return StreamBuilder<QuerySnapshot>(
-                stream: listingsCollection
-                    .where('schoolName', isEqualTo: schoolName)
-                    .orderBy('timestamp', descending: true)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return Center(child: Text('No listings available for your school', style: TextStyle(color: Colors.grey[500])));
-                  }
-                  final docs = snapshot.data!.docs;
-                  return ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: docs.length,
-                    itemBuilder: (context, index) {
-                      final doc = docs[index];
-                      final data = doc.data() as Map<String, dynamic>;
-                      final imageUrl = data['imageUrl'] as String? ?? '';
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.all(12),
-                          leading: imageUrl.isNotEmpty
-                              ? SizedBox(
+              return Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    color: Theme.of(context).cardColor,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              _filterBySchool ? Icons.school : Icons.public,
+                              size: 20,
+                              color: Colors.grey[400],
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _filterBySchool ? 'My School Only' : 'All Schools',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey[300],
+                              ),
+                            ),
+                          ],
+                        ),
+                        Switch(
+                          value: _filterBySchool,
+                          onChanged: (value) {
+                            setState(() {
+                              _filterBySchool = value;
+                            });
+                          },
+                          activeColor: Colors.cyanAccent[400],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: _filterBySchool
+                          ? listingsCollection
+                          .where('schoolName', isEqualTo: schoolName)
+                          .orderBy('timestamp', descending: true)
+                          .snapshots()
+                          : listingsCollection
+                          .orderBy('timestamp', descending: true)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        if (snapshot.hasError) {
+                          return Center(child: Text('Error: ${snapshot.error}'));
+                        }
+                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                          return Center(
+                            child: Text(
+                              _filterBySchool
+                                  ? 'No listings available for your school'
+                                  : 'No listings available',
+                              style: TextStyle(color: Colors.grey[500]),
+                            ),
+                          );
+                        }
+                        final docs = snapshot.data!.docs;
+                        return ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: docs.length,
+                          itemBuilder: (context, index) {
+                            final doc = docs[index];
+                            final data = doc.data() as Map<String, dynamic>;
+                            final imageUrl = data['imageUrl'] as String? ?? '';
+                            final listingSchool = data['schoolName'] as String? ?? '';
+
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.all(12),
+                                leading: imageUrl.isNotEmpty
+                                    ? SizedBox(
                                   width: 72,
                                   height: 72,
                                   child: CachedNetworkImage(
@@ -319,19 +371,53 @@ class _RequesterHomePageState extends State<RequesterHomePage> {
                                     errorWidget: (c, s, e) => const Icon(Icons.broken_image),
                                   ),
                                 )
-                              : const SizedBox(width: 72, height: 72, child: Icon(Icons.photo)),
-                          title: Text(data['title'] ?? '', style: Theme.of(context).textTheme.titleMedium),
-                          subtitle: Text(
-                            data['description'] ?? '',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: Text(data['contactInfo'] ?? ''),
-                        ),
-                      );
-                    },
-                  );
-                },
+                                    : const SizedBox(width: 72, height: 72, child: Icon(Icons.photo)),
+                                title: Text(
+                                  data['title'] ?? '',
+                                  style: Theme.of(context).textTheme.titleMedium,
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      data['description'] ?? '',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    if (listingSchool.isNotEmpty && !_filterBySchool && listingSchool != schoolName) ...[
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Icon(Icons.school, size: 14, color: Colors.grey[500]),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            listingSchool,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[500],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                trailing: Text(
+                                  data['contactInfo'] ?? '',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
               );
             },
           ),
@@ -452,8 +538,8 @@ class _PostPageState extends State<PostPage> {
                 items: ['Take', 'Borrow']
                     .map(
                       (label) =>
-                          DropdownMenuItem(value: label, child: Text(label)),
-                    )
+                      DropdownMenuItem(value: label, child: Text(label)),
+                )
                     .toList(),
                 onChanged: (value) {
                   setState(() {

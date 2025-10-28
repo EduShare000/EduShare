@@ -7,13 +7,11 @@ import 'package:path/path.dart' as path;
 import 'package:firebase_auth/firebase_auth.dart';
 import '../app_navigator.dart';
 
-/// A lightweight wrapper widget exported for use inside the app shell.
 class Donator extends StatelessWidget {
   const Donator({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // The main MaterialApp is provided by `main.dart` (AppShell).
     return const DonatorHomePage();
   }
 }
@@ -63,7 +61,6 @@ class Request {
   }
 }
 
-// Create Listing Page for Donators to post public listings
 class CreateListingPage extends StatefulWidget {
   final Function(Listing) onPostListing;
 
@@ -90,7 +87,6 @@ class _CreateListingPageState extends State<CreateListingPage> {
 
   void _submit() {
     if (_formKey.currentState!.validate() && currentUser != null) {
-      // upload image first if selected
       _createListing();
     }
   }
@@ -105,7 +101,6 @@ class _CreateListingPageState extends State<CreateListingPage> {
       imageUrl = await ref.getDownloadURL();
     }
 
-    // read user's schoolName from users collection
     final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
       String schoolName = '';
       if (userDoc.exists) {
@@ -121,7 +116,6 @@ class _CreateListingPageState extends State<CreateListingPage> {
       contactInfo: _contactController.text,
     );
 
-    // return full map including schoolName and imageUrl
     final listingMap = listing.toJson();
     listingMap['schoolName'] = schoolName;
     listingMap['imageUrl'] = imageUrl;
@@ -133,7 +127,6 @@ class _CreateListingPageState extends State<CreateListingPage> {
       description: listing.description,
       contactInfo: listing.contactInfo,
     ));
-    // directly write the map to the listings collection to include fields
     await FirebaseFirestore.instance.collection('listings').add(listingMap);
 
     appNavigatorKey.currentState?.pop();
@@ -180,7 +173,6 @@ class _CreateListingPageState extends State<CreateListingPage> {
                 validator: (v) => v == null || v.isEmpty ? 'Enter contact info' : null,
               ),
               const SizedBox(height: 12),
-              // Image picker
               Row(
                 children: [
                   ElevatedButton.icon(
@@ -220,7 +212,7 @@ class _DonatorHomePageState extends State<DonatorHomePage> {
   final CollectionReference requestsCollection = FirebaseFirestore.instance
       .collection('requests');
   final CollectionReference listingsCollection = FirebaseFirestore.instance
-    .collection('listings');
+      .collection('listings');
   final CollectionReference usersCollection = FirebaseFirestore.instance
       .collection('users');
 
@@ -300,7 +292,7 @@ class _DonatorHomePageState extends State<DonatorHomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Your Postings"),
+        title: const Text("Active Requests"),
         actions: [
           FutureBuilder<DocumentSnapshot>(
             future: profileFuture,
@@ -332,7 +324,7 @@ class _DonatorHomePageState extends State<DonatorHomePage> {
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: requestsCollection
-            .where('userId', isEqualTo: currentUser?.uid)
+            .where('status', isEqualTo: 'Active')
             .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
@@ -349,7 +341,7 @@ class _DonatorHomePageState extends State<DonatorHomePage> {
                 children: [
                   const SizedBox(height: 16),
                   Text(
-                    "You haven't requested anything yet",
+                    "No active requests are currently posted.",
                     style: TextStyle(fontSize: 16, color: Colors.grey[500]),
                   ),
                 ],
@@ -387,6 +379,14 @@ class _DonatorHomePageState extends State<DonatorHomePage> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(color: Colors.grey[400]),
                         ),
+                        const SizedBox(height: 8),
+                        Text(
+                          "Contact: ${request.contactInfo}",
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
                         const Divider(height: 24, color: Colors.white12),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -402,19 +402,25 @@ class _DonatorHomePageState extends State<DonatorHomePage> {
                                 color: Colors.grey[500],
                               ),
                               onSelected: (String result) {
-                                _updateRequestStatus(request.id, result);
+                                if (currentUser?.uid == request.userId) {
+                                  _updateRequestStatus(request.id, result);
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('You can only update the status of your own requests.')),
+                                  );
+                                }
                               },
                               itemBuilder: (BuildContext context) =>
-                                  <PopupMenuEntry<String>>[
-                                    const PopupMenuItem<String>(
-                                      value: 'Fulfilled',
-                                      child: Text('Mark as Fulfilled'),
-                                    ),
-                                    const PopupMenuItem<String>(
-                                      value: 'Active',
-                                      child: Text('Mark as Active'),
-                                    ),
-                                  ],
+                              <PopupMenuEntry<String>>[
+                                const PopupMenuItem<String>(
+                                  value: 'Fulfilled',
+                                  child: Text('Mark as Fulfilled'),
+                                ),
+                                const PopupMenuItem<String>(
+                                  value: 'Active',
+                                  child: Text('Mark as Active'),
+                                ),
+                              ],
                             ),
                           ],
                         ),

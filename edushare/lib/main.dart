@@ -20,27 +20,64 @@ void main() async {
   }
 }
 
-class AppShell extends StatefulWidget {
+class AppShell extends StatelessWidget {
   const AppShell({super.key});
 
   @override
-  State<AppShell> createState() => _AppShellState();
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'EduShare',
+      navigatorKey: appNavigatorKey,
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF1C1C1E),
+        cardColor: const Color(0xFF2C2C2E),
+        colorScheme: ColorScheme.dark(
+          primary: Colors.cyanAccent[400]!,
+          secondary: Colors.cyanAccent[400]!,
+          surface: const Color(0xFF1C1C1E),
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF1C1C1E),
+          elevation: 0,
+          titleTextStyle: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+      ),
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
+          if (snapshot.hasData) {
+            return const MainAppScreen();
+          }
+
+          return const LoginPage();
+        },
+      ),
+    );
+  }
 }
 
-class _AppShellState extends State<AppShell> {
-  // 0 = Requester, 1 = Donator
-  int _selectedIndex = 0;
-  bool _isLoggedIn = false;
+class MainAppScreen extends StatefulWidget {
+  const MainAppScreen({super.key});
 
   @override
-  void initState() {
-    super.initState();
-    FirebaseAuth.instance.authStateChanges().listen((User? user) {
-      setState(() {
-        _isLoggedIn = user != null;
-      });
-    });
-  }
+  State<MainAppScreen> createState() => _MainAppScreenState();
+}
+
+class _MainAppScreenState extends State<MainAppScreen> {
+  int _selectedIndex = 0;
 
   void _select(int index) {
     setState(() {
@@ -50,26 +87,6 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ThemeData(
-      brightness: Brightness.dark,
-      scaffoldBackgroundColor: const Color(0xFF1C1C1E),
-      cardColor: const Color(0xFF2C2C2E),
-      colorScheme: ColorScheme.dark(
-        primary: Colors.cyanAccent[400]!,
-        secondary: Colors.cyanAccent[400]!,
-        surface: const Color(0xFF1C1C1E),
-      ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFF1C1C1E),
-        elevation: 0,
-        titleTextStyle: TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-        ),
-      ),
-    );
-
     Widget body;
     String title;
     if (_selectedIndex == 0) {
@@ -80,62 +97,96 @@ class _AppShellState extends State<AppShell> {
       title = 'Donator';
     }
 
-    return MaterialApp(
-      title: 'EduShare',
-      navigatorKey: appNavigatorKey,
-      theme: theme,
-      home: _isLoggedIn 
-          ? Scaffold(
-              appBar: AppBar(
-                title: Text('EduShare - $title'),
-                actions: [
-                  IconButton(
-                    icon: const Icon(Icons.logout),
-                    onPressed: () {
-                      FirebaseAuth.instance.signOut();
-                    },
-                  ),
-                ],
-              ),
-              drawer: Drawer(
-                child: SafeArea(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      DrawerHeader(
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF111111),
-                        ),
-                        child: Center(
-                          child: Text('EduShare',
-                              style: Theme.of(context).textTheme.titleLarge),
-                        ),
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.list),
-                        title: const Text('Requester - Find items'),
-                        selected: _selectedIndex == 0,
-                        onTap: () {
-                          appNavigatorKey.currentState?.pop();
-                          _select(0);
-                        },
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.add_box),
-                        title: const Text('Donator - Create listings'),
-                        selected: _selectedIndex == 1,
-                        onTap: () {
-                          appNavigatorKey.currentState?.pop();
-                          _select(1);
-                        },
-                      ),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('EduShare - $title'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Sign Out',
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+            },
+          ),
+        ],
+      ),
+      drawer: Drawer(
+        child: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              DrawerHeader(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.cyanAccent[400]!,
+                      Colors.greenAccent[400]!,
                     ],
                   ),
                 ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.school,
+                      size: 48,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'EduShare',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      FirebaseAuth.instance.currentUser?.email ?? '',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              body: body,
-            )
-          : const LoginPage(),
+              ListTile(
+                leading: const Icon(Icons.list),
+                title: const Text('Requester - Find items'),
+                selected: _selectedIndex == 0,
+                selectedTileColor: Colors.cyanAccent[400]!.withOpacity(0.1),
+                onTap: () {
+                  Navigator.pop(context);
+                  _select(0);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.add_box),
+                title: const Text('Donator - Create listings'),
+                selected: _selectedIndex == 1,
+                selectedTileColor: Colors.cyanAccent[400]!.withOpacity(0.1),
+                onTap: () {
+                  Navigator.pop(context);
+                  _select(1);
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.logout, color: Colors.redAccent),
+                title: const Text('Sign Out'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await FirebaseAuth.instance.signOut();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+      body: body,
     );
   }
 }
