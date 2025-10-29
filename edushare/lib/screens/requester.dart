@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../app_navigator.dart';
 
 class Requester extends StatelessWidget {
@@ -74,7 +76,6 @@ class _RequesterHomePageState extends State<RequesterHomePage> {
   final CollectionReference usersCollection = FirebaseFirestore.instance
       .collection('users');
 
-
   bool _filterBySchool = true;
 
   Future<void> _addRequest(Request newRequest) async {
@@ -131,6 +132,12 @@ class _RequesterHomePageState extends State<RequesterHomePage> {
     );
   }
 
+  void _openHelpChat() {
+    appNavigatorKey.currentState?.push(
+      MaterialPageRoute(builder: (context) => const HelpChatPage()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final profileFuture = usersCollection.doc(currentUser?.uid).get();
@@ -142,6 +149,11 @@ class _RequesterHomePageState extends State<RequesterHomePage> {
           title: const Text("Your Postings"),
           bottom: const TabBar(tabs: [Tab(text: 'Your Posts'), Tab(text: 'Listings')]),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.help_outline),
+              tooltip: 'Help',
+              onPressed: _openHelpChat,
+            ),
             FutureBuilder<DocumentSnapshot>(
               future: profileFuture,
               builder: (context, snapshot) {
@@ -435,6 +447,303 @@ class _RequesterHomePageState extends State<RequesterHomePage> {
       ),
     );
   }
+}
+
+class HelpChatPage extends StatefulWidget {
+  const HelpChatPage({super.key});
+
+  @override
+  State<HelpChatPage> createState() => _HelpChatPageState();
+}
+
+class _HelpChatPageState extends State<HelpChatPage> {
+  final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  final List<ChatMessage> _messages = [];
+  bool _isLoading = false;
+
+  static const String GEMINI_API_KEY = 'ENTER_API_KEY';
+
+  final String systemPrompt = '''
+You are a helpful assistant for EduShare, a student-to-student resource sharing app. Your role is to help users understand how to use the app effectively.
+
+EduShare has two main roles:
+
+1. REQUESTER MODE (where users currently are):
+   - "Your Posts" tab: View your own requests for items you need
+     * Create posts for items you're looking to "Take" (permanently) or "Borrow" (temporarily)
+     * Mark requests as "Fulfilled" when you get the item, or "Active" to reopen them
+     * Each post includes: title, description, contact info, and request type
+   - "Listings" tab: Browse items that donators are offering
+     * Toggle between "My School Only" and "All Schools" using the switch at the top
+     * When viewing all schools, listings from other schools show a school badge
+     * See item images, descriptions, and contact info to reach out to donors
+   - Plus button (+): Create a new request for an item you need
+   - Help button: Opens this chat assistant (where you are now)
+   - Profile button: View your account details and school information
+
+2. DONATOR MODE (accessible via the menu drawer):
+   - View all active requests from students who need items
+   - Create listings to offer items you want to give away or lend
+   - Upload images of your items when creating listings
+   - Your listings are visible to students at your school (or all schools if they toggle the filter)
+   - Only you can update the status of your own requests
+
+KEY FEATURES:
+- School filtering: By default, requesters only see listings from their school, but can toggle to view all
+- Image uploads: Donators can add photos to their listings
+- Contact info: Each post/listing includes contact details for direct communication
+- Status tracking: Mark items as "Active" or "Fulfilled"
+- Two-way marketplace: Both ask for items (requests) and offer items (listings)
+
+NAVIGATION:
+- Use the hamburger menu (☰) to switch between Requester and Donator modes
+- Sign out button in the menu or top-right
+- Profile shows your display name, school, and account details
+
+Answer user questions clearly and concisely. If they ask about features not mentioned here, politely explain that the app focuses on simple peer-to-peer item sharing between students. Keep responses helpful and friendly.
+''';
+
+  @override
+  void initState() {
+    super.initState();
+    _messages.add(ChatMessage(
+      text: "Hi! I'm here to help you use EduShare. Ask me anything about how the app works!",
+      isUser: false,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendMessage(String message) async {
+    if (message.trim().isEmpty) return;
+
+    setState(() {
+      _messages.add(ChatMessage(text: message, isUser: true));
+      _isLoading = true;
+    });
+
+    _messageController.clear();
+    _scrollToBottom();
+
+    try {
+      final response = await _getGeminiResponse(message);
+      setState(() {
+        _messages.add(ChatMessage(text: response, isUser: false));
+        _isLoading = false;
+      });
+      _scrollToBottom();
+    } catch (e) {
+      setState(() {
+        _messages.add(ChatMessage(
+          text: "Sorry, I'm having trouble connecting right now. Error: ${e.toString()}\n\nPlease make sure your API key is configured correctly.",
+          isUser: false,
+        ));
+        _isLoading = false;
+      });
+      _scrollToBottom();
+    }
+  }
+
+  Future<String> _getGeminiResponse(String userMessage) async {
+    final url = Uri.parse(
+      'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=$GEMINI_API_KEY',
+    );
+
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'contents': [
+          {
+            'parts': [
+              {'text': systemPrompt},
+              {'text': 'User question: $userMessage'},
+            ]
+          }
+        ],
+        'generationConfig': {
+          'temperature': 0.7,
+          'maxOutputTokens': 500,
+        }
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['candidates'][0]['content']['parts'][0]['text'];
+    } else {
+      print('API Error: ${response.statusCode}');
+      print('Response body: ${response.body}');
+      throw Exception('Failed to get response: ${response.statusCode} - ${response.body}');
+    }
+  }
+
+  void _scrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Help & Support'),
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.all(16),
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                final message = _messages[index];
+                return _buildMessageBubble(message);
+              },
+            ),
+          ),
+          if (_isLoading)
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Row(
+                children: [
+                  const SizedBox(width: 16),
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Colors.cyanAccent[400]!,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Thinking...',
+                    style: TextStyle(
+                      color: Colors.grey[500],
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    decoration: InputDecoration(
+                      hintText: 'Ask me anything about EduShare...',
+                      hintStyle: TextStyle(color: Colors.grey[500]),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: Theme.of(context).scaffoldBackgroundColor,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                    ),
+                    maxLines: null,
+                    textCapitalization: TextCapitalization.sentences,
+                    onSubmitted: _isLoading ? null : _sendMessage,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.cyanAccent[400]!,
+                        Colors.greenAccent[400]!,
+                      ],
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.send, color: Colors.white),
+                    onPressed: _isLoading
+                        ? null
+                        : () => _sendMessage(_messageController.text),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageBubble(ChatMessage message) {
+    return Align(
+      alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
+        ),
+        decoration: BoxDecoration(
+          color: message.isUser
+              ? Colors.cyanAccent[400]
+              : Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 3,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Text(
+          message.text,
+          style: TextStyle(
+            color: message.isUser ? Colors.black87 : Colors.white,
+            fontSize: 15,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class ChatMessage {
+  final String text;
+  final bool isUser;
+
+  ChatMessage({required this.text, required this.isUser});
 }
 
 class PostPage extends StatefulWidget {
