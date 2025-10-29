@@ -78,6 +78,11 @@ class _RequesterHomePageState extends State<RequesterHomePage> {
 
   bool _filterBySchool = true;
 
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
   Future<void> _addRequest(Request newRequest) async {
     try {
       await requestsCollection.add(newRequest.toJson());
@@ -373,17 +378,42 @@ class _RequesterHomePageState extends State<RequesterHomePage> {
                               child: ListTile(
                                 contentPadding: const EdgeInsets.all(12),
                                 leading: imageUrl.isNotEmpty
-                                    ? SizedBox(
-                                  width: 72,
-                                  height: 72,
-                                  child: CachedNetworkImage(
-                                    imageUrl: imageUrl,
-                                    fit: BoxFit.cover,
-                                    placeholder: (c, s) => const Center(child: CircularProgressIndicator()),
-                                    errorWidget: (c, s, e) => const Icon(Icons.broken_image),
+                                    ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: SizedBox(
+                                    width: 72,
+                                    height: 72,
+                                    child: CachedNetworkImage(
+                                      imageUrl: imageUrl,
+                                      fit: BoxFit.cover,
+                                      placeholder: (c, s) => Container(
+                                        color: Colors.grey[800],
+                                        child: const Center(
+                                          child: SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          ),
+                                        ),
+                                      ),
+                                      errorWidget: (c, s, e) => Container(
+                                        color: Colors.grey[800],
+                                        child: const Icon(Icons.broken_image, color: Colors.grey),
+                                      ),
+                                      fadeInDuration: const Duration(milliseconds: 200),
+                                      fadeOutDuration: const Duration(milliseconds: 200),
+                                    ),
                                   ),
                                 )
-                                    : const SizedBox(width: 72, height: 72, child: Icon(Icons.photo)),
+                                    : Container(
+                                  width: 72,
+                                  height: 72,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[800],
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(Icons.photo, color: Colors.grey),
+                                ),
                                 title: Text(
                                   data['title'] ?? '',
                                   style: Theme.of(context).textTheme.titleMedium,
@@ -462,7 +492,7 @@ class _HelpChatPageState extends State<HelpChatPage> {
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
 
-  static const String GEMINI_API_KEY = 'ENTER_API_KEY';
+  static const String GEMINI_API_KEY = 'AIzaSyCbUA8yA0taJeBeoU_8A9G_gJUrWuh7vc4';
 
   final String systemPrompt = '''
 You are a helpful assistant for EduShare, a student-to-student resource sharing app. Your role is to help users understand how to use the app effectively.
@@ -552,7 +582,7 @@ Answer user questions clearly and concisely. If they ask about features not ment
 
   Future<String> _getGeminiResponse(String userMessage) async {
     final url = Uri.parse(
-      'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=$GEMINI_API_KEY',
+      'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=$GEMINI_API_KEY',
     );
 
     final response = await http.post(
