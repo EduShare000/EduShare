@@ -492,7 +492,7 @@ class _HelpChatPageState extends State<HelpChatPage> {
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
 
-  static const String GEMINI_API_KEY = 'AIzaSyCbUA8yA0taJeBeoU_8A9G_gJUrWuh7vc4';
+  static const String GEMINI_API_KEY = 'ENTER_API_KEY';
 
   final String systemPrompt = '''
 You are a helpful assistant for EduShare, a student-to-student resource sharing app. Your role is to help users understand how to use the app effectively.
