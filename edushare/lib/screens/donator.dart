@@ -94,19 +94,19 @@ class _CreateListingPageState extends State<CreateListingPage> {
   Future<void> _createListing() async {
     final uid = currentUser!.uid;
     String imageUrl = '';
-      if (_pickedFile != null) {
+    if (_pickedFile != null) {
       final fileName = path.basename(_pickedFile!.path);
       final ref = FirebaseStorage.instance.ref().child('listing_images/$uid/$fileName');
-        await ref.putFile(File(_pickedFile!.path));
+      await ref.putFile(File(_pickedFile!.path));
       imageUrl = await ref.getDownloadURL();
     }
 
     final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      String schoolName = '';
-      if (userDoc.exists) {
-        final data = userDoc.data() as Map<String, dynamic>?;
-        schoolName = data?['schoolName'] ?? '';
-      }
+    String schoolName = '';
+    if (userDoc.exists) {
+      final data = userDoc.data() as Map<String, dynamic>?;
+      schoolName = data?['schoolName'] ?? '';
+    }
 
     final listing = Listing(
       id: '',
@@ -120,13 +120,6 @@ class _CreateListingPageState extends State<CreateListingPage> {
     listingMap['schoolName'] = schoolName;
     listingMap['imageUrl'] = imageUrl;
 
-    widget.onPostListing(Listing(
-      id: '',
-      userId: uid,
-      title: listing.title,
-      description: listing.description,
-      contactInfo: listing.contactInfo,
-    ));
     await FirebaseFirestore.instance.collection('listings').add(listingMap);
 
     appNavigatorKey.currentState?.pop();
@@ -256,6 +249,21 @@ class _DonatorHomePageState extends State<DonatorHomePage> {
     }
   }
 
+  Future<void> _deleteListing(String listingId) async {
+    try {
+      await listingsCollection.doc(listingId).delete();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Listing deleted')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed to delete: $e')));
+      }
+    }
+  }
+
   Widget _buildStatusChip(String status) {
     Color color;
     if (status == 'Active') {
@@ -290,125 +298,148 @@ class _DonatorHomePageState extends State<DonatorHomePage> {
   Widget build(BuildContext context) {
     final profileFuture = usersCollection.doc(currentUser?.uid).get();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Active Requests"),
-        actions: [
-          FutureBuilder<DocumentSnapshot>(
-            future: profileFuture,
-            builder: (context, snapshot) {
-              String profileName = currentUser?.uid ?? "Guest User";
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text("Donator"),
+          bottom: const TabBar(tabs: [
+            Tab(text: 'Active Requests'),
+            Tab(text: 'My Listings'),
+          ]),
+          actions: [
+            FutureBuilder<DocumentSnapshot>(
+              future: profileFuture,
+              builder: (context, snapshot) {
+                String profileName = currentUser?.uid ?? "Guest User";
 
-              if (snapshot.hasData && snapshot.data!.exists) {
-                final data = snapshot.data!.data() as Map<String, dynamic>?;
-                profileName =
-                    data?['displayName'] ?? currentUser!.uid.substring(0, 8);
-              } else if (snapshot.connectionState == ConnectionState.waiting) {
-                profileName = "Loading...";
-              } else if (currentUser != null) {
-                profileName = currentUser!.uid.substring(0, 8);
-              }
+                if (snapshot.hasData && snapshot.data!.exists) {
+                  final data = snapshot.data!.data() as Map<String, dynamic>?;
+                  profileName =
+                      data?['displayName'] ?? currentUser!.uid.substring(0, 8);
+                } else if (snapshot.connectionState == ConnectionState.waiting) {
+                  profileName = "Loading...";
+                } else if (currentUser != null) {
+                  profileName = currentUser!.uid.substring(0, 8);
+                }
 
-              return TextButton.icon(
-                onPressed: _openProfile,
-                icon: const Icon(Icons.account_circle, color: Colors.white),
-                label: Text(
-                  profileName,
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: requestsCollection
-            .where('status', isEqualTo: 'Active')
-            .orderBy('timestamp', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 16),
-                  Text(
-                    "No active requests are currently posted.",
-                    style: TextStyle(fontSize: 16, color: Colors.grey[500]),
+                return TextButton.icon(
+                  onPressed: _openProfile,
+                  icon: const Icon(Icons.account_circle, color: Colors.white),
+                  label: Text(
+                    profileName,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ],
+                );
+              },
+            ),
+          ],
+        ),
+        body: TabBarView(
+          children: [
+            _buildActiveRequestsTab(),
+            _buildMyListingsTab(),
+          ],
+        ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () {
+            appNavigatorKey.currentState?.push(
+              MaterialPageRoute(
+                builder: (context) => CreateListingPage(onPostListing: _addListing),
               ),
             );
-          }
+          },
+          child: const Icon(Icons.add),
+        ),
+      ),
+    );
+  }
 
-          final requests = snapshot.data!.docs;
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: requests.length,
-            itemBuilder: (context, index) {
-              final requestDoc = requests[index];
-              final request = Request.fromFirestore(requestDoc);
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 16.0),
-                child: Card(
-                  elevation: 5,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          request.title,
-                          style: Theme.of(context).textTheme.titleSmall,
+  Widget _buildActiveRequestsTab() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: requestsCollection
+          .where('status', isEqualTo: 'Active')
+          .orderBy('timestamp', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.search_off, size: 64, color: Colors.grey[600]),
+                const SizedBox(height: 16),
+                Text(
+                  "No active requests are currently posted.",
+                  style: TextStyle(fontSize: 16, color: Colors.grey[500]),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final requests = snapshot.data!.docs;
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: requests.length,
+          itemBuilder: (context, index) {
+            final requestDoc = requests[index];
+            final request = Request.fromFirestore(requestDoc);
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16.0),
+              child: Card(
+                elevation: 5,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        request.title,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        request.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: Colors.grey[400]),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "Contact: ${request.contactInfo}",
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          request.description,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: Colors.grey[400]),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "Contact: ${request.contactInfo}",
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const Divider(height: 24, color: Colors.white12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _buildStatusChip(request.status),
+                          Text(
+                            "Type: ${request.requestType}",
+                            style: TextStyle(color: Colors.grey[500]),
                           ),
-                        ),
-                        const Divider(height: 24, color: Colors.white12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _buildStatusChip(request.status),
-                            Text(
-                              "Type: ${request.requestType}",
-                              style: TextStyle(color: Colors.grey[500]),
-                            ),
+                          if (currentUser?.uid == request.userId)
                             PopupMenuButton<String>(
                               icon: Icon(
                                 Icons.more_vert,
                                 color: Colors.grey[500],
                               ),
                               onSelected: (String result) {
-                                if (currentUser?.uid == request.userId) {
-                                  _updateRequestStatus(request.id, result);
-                                } else {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('You can only update the status of your own requests.')),
-                                  );
-                                }
+                                _updateRequestStatus(request.id, result);
                               },
                               itemBuilder: (BuildContext context) =>
                               <PopupMenuEntry<String>>[
@@ -422,26 +453,188 @@ class _DonatorHomePageState extends State<DonatorHomePage> {
                                 ),
                               ],
                             ),
-                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildMyListingsTab() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: listingsCollection
+          .where('userId', isEqualTo: currentUser?.uid)
+          .orderBy('timestamp', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey[600]),
+                const SizedBox(height: 16),
+                Text(
+                  "You haven't posted any listings yet",
+                  style: TextStyle(fontSize: 16, color: Colors.grey[500]),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "Tap the + button to create one",
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final listings = snapshot.data!.docs;
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: listings.length,
+          itemBuilder: (context, index) {
+            final doc = listings[index];
+            final data = doc.data() as Map<String, dynamic>;
+            final imageUrl = data['imageUrl'] as String? ?? '';
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              elevation: 3,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (imageUrl.isNotEmpty)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          imageUrl,
+                          width: 80,
+                          height: 80,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: 80,
+                              height: 80,
+                              color: Colors.grey[800],
+                              child: const Icon(Icons.broken_image, color: Colors.grey),
+                            );
+                          },
+                        ),
+                      )
+                    else
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[800],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.photo, size: 40, color: Colors.grey),
+                      ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            data['title'] ?? 'No title',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            data['description'] ?? '',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: Colors.grey[400], fontSize: 14),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(Icons.contact_mail, size: 14, color: Colors.grey[500]),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  data['contactInfo'] ?? '',
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.primary,
+                                    fontSize: 12,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuButton<String>(
+                      icon: Icon(Icons.more_vert, color: Colors.grey[500]),
+                      onSelected: (value) {
+                        if (value == 'delete') {
+                          _showDeleteConfirmation(doc.id);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete, color: Colors.red),
+                              SizedBox(width: 8),
+                              Text('Delete', style: TextStyle(color: Colors.red)),
+                            ],
+                          ),
                         ),
                       ],
                     ),
-                  ),
+                  ],
                 ),
-              );
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showDeleteConfirmation(String listingId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Listing'),
+        content: const Text('Are you sure you want to delete this listing? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _deleteListing(listingId);
             },
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          appNavigatorKey.currentState?.push(
-            MaterialPageRoute(
-              builder: (context) => CreateListingPage(onPostListing: _addListing),
-            ),
-          );
-        },
-        child: const Icon(Icons.add),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }
@@ -548,8 +741,8 @@ class _PostPageState extends State<PostPage> {
                 items: ['Take', 'Borrow']
                     .map(
                       (label) =>
-                          DropdownMenuItem(value: label, child: Text(label)),
-                    )
+                      DropdownMenuItem(value: label, child: Text(label)),
+                )
                     .toList(),
                 onChanged: (value) {
                   setState(() {
@@ -666,12 +859,12 @@ class Listing {
   });
 
   Map<String, dynamic> toJson() => {
-        'userId': userId,
-        'title': title,
-        'description': description,
-        'contactInfo': contactInfo,
-        'timestamp': FieldValue.serverTimestamp(),
-      };
+    'userId': userId,
+    'title': title,
+    'description': description,
+    'contactInfo': contactInfo,
+    'timestamp': FieldValue.serverTimestamp(),
+  };
 
   factory Listing.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;

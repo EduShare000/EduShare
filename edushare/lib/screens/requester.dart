@@ -492,7 +492,7 @@ class _HelpChatPageState extends State<HelpChatPage> {
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
 
-  static const String GEMINI_API_KEY = 'ENTER_API_KEY';
+  static const String GEMINI_API_KEY = 'ENTER_API_KEY_HERE';
 
   final String systemPrompt = '''
 You are a helpful assistant for EduShare, a student-to-student resource sharing app. Your role is to help users understand how to use the app effectively.
@@ -582,7 +582,7 @@ Answer user questions clearly and concisely. If they ask about features not ment
 
   Future<String> _getGeminiResponse(String userMessage) async {
     final url = Uri.parse(
-      'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=$GEMINI_API_KEY',
+      'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=$GEMINI_API_KEY',
     );
 
     final response = await http.post(
